@@ -1,0 +1,175 @@
+---
+title: "와인품질 예측 제안서"
+author: "권이태, 김예원, 김태희"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_document
+
+---
+
+---
+
+```{r setup, include = FALSE}
+#You do not need to touch this chunk
+#words after "#" sign are treated as comments
+#It is strongly recommanded to use English in r markdown
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### 1. 데이터 코드북
+```{r codebook1, echo=FALSE}
+out <- 
+  structure(c("numerical(discrete)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "numerical(continuous)", "categorical(nominal)",
+"품질; 와인의 종합적인 품질", "고정산; 와인에 포함된 비휘발성 산의 총량", "휘발산; 와인에 포함된 휘발성 산의 총량", "시트르산; 와인에 포함된 시트르산(구연산)의 총량", "잔당; 발효 이후 와인 속에 포함된 잔당", "염화물; 염화물의 양", "자유 이산화황; 분자 혹은 이온 상태로 존재하는 이산화황의 양", "총 이산화황; 자유 이산화황과 다른 분자에 결합한 부착 이산화황의 합", "밀도; 부피에 대한 질량의 비", "pH; 수소이온 농도에 음의 로그를 취한 값)", "황산염; 황산염의 양", "알코올 도수", "와인 종류(red = 적색/레드 와인, white = 백색/화이트 와인)"), 
+  .Dim = c(13L, 2L), 
+  .Dimnames = list(NULL, c("Variable Type","Description")))
+
+colnames(out) <- c('Variable type','Description')
+rownames(out) <- c('quality', 'fixed acidity', 'volatile acidity', 'citric acid','residual sugar','chlorides','free sulfur dioxide','total sulfur dioxide', 'density', 'pH', 'sulphates', 'alcohol', 'type')
+
+rownames(out) <- sprintf('<b>%s</b>', rownames(out))
+
+
+library(htmlTable)
+htmlTable(out, rowlabel = 'Variable', 
+          ctable = TRUE, align = 'lll',
+          n.cgroup = c(1,1),
+          tspanner = c('response variable','explanatory variable'),n.tspanner = c(1,12), css.cell = 'padding: 0px 25px 3px;',col.rgroup = c("#F7F7F7", "#F7F7F7", rep(c("none", "#F7F7F7"),5), "none"))
+```
+<br>
+
+### 2. 연구 가설
+> #### **<u>와인 품질 가설</u>** : 변수의 값이 각 변수의 중앙값에 가까울수록 quality가 높을 것이다.
+> #### **<u>기타 연구 가설</u>** : 변수 간의 관계에서 중요한 교락 요인은 '효모의 활성'이며, 이산화황은 이를 조절한다.
+
+<br>
+
+### 3. 각 연구가설에 대한 탐색적 자료 분석
+
+#### 3-1. 와인 품질 가설
+<u>와인 품질 가설</u>에서 변수들의 수치요약값 중 중앙값을 중요하게 보기로 하였으니, 여러 변수들의 density를 그래프로 나타내 이들의 분포를 확인하였다. 또한 quality별로 와인이 얼마나 있는지도 막대그래프를 이용해 확인하였다.
+
+<div align="center">
+```{r main1, echo = F}
+wine <- read.csv("train.csv")
+
+par(mfrow = c(2,2), no.readonly = T)
+
+barplot(table(wine$quality), ylim = c(0,2500), xlab = "Quality", ylab = "Frequency")
+plot(density(wine$fixed.acidity), main = "Density of Fixed Acidity", xlab = "Fixed Acidity")
+plot(density(wine$volatile.acidity), main = "Density of Volatile Acidity", xlab = "Volatile Acidity")
+plot(density(wine$citric.acid), main = "Density of Volatile Acidity", xlab = "Citric Acid")
+```
+</div>
+
+이때 품질은 그 값이 정수값으로, 산점도를 그리면 비직관적인 플롯이 찍힌다. 이를 조금이나마 개선하기 위하여 품질에 따라 상자 그림을 그려 그 변화를 확인하였다. 아래는 품질에 따른 고정산의 분포를 확인한 것이다.
+
+<div align="center">
+```{r main2, echo = F}
+quality1=cut(wine$quality,breaks=c(0,3,4,5,6,7,8,9),
+             include.lowest=TRUE,
+             right=FALSE,
+             labels=c("3","4","5","6","7","8","9"))
+
+library(ggplot2)
+ggplot(data=wine,aes(x=quality1, y=fixed.acidity))+geom_boxplot() + labs(title="Box Plot of Fixed Acidity", x ="Quality", y = "Fixed Acidity") + theme(plot.title = element_text(hjust = 0.5))
+```
+</div>
+
+위의 상자 그림으로부터, quality가 낮을 때는 상자가 윗 방향으로 이동해 있는 것을 확인할 수 있었다. 또한 품질이 높아질수록 상자에서 whisker reach사이의 간격과 IQR이 작아지는 것을 볼 수 있었는데, 이는 고품질의 와인일수록 높지도 낮지도 않은 어떤 정해진 수준의 고정산 비율을 가지고 있음을 의미한다. 가설에서는 그 값을 일단 중앙값이라 두고 있으나, 이는 추후 다른 인자들에 대해서도 분석을 시행함으로써 확인되어야 할 것으로 보인다.
+
+<br>
+
+#### 3-2. 기타 연구 가설
+
+변수 간의 관계를 관찰하기 위하여, 변수 사이의 상관계수를 표시하고 이를 색깔로서 표현한 히트맵을 아래와 같이 그렸다.
+
+<div align="center">
+```{r extra1, echo = F, warning =F, message = F}
+library(ggcorrplot)
+corr <- cor(wine[3:13])
+ggcorrplot(corr, method = c("square", "circle"), type = c("full",
+  "lower", "upper"), ggtheme = ggplot2::theme_minimal, title = "Correlation Matrix for Variables",
+  show.legend = TRUE, legend.title = "Corr", show.diag = T,
+  colors = c("blue", "white", "red"), outline.color = "gray",
+  hc.order = FALSE, hc.method = "complete", lab = T,
+  lab_col = "black", lab_size = 3, p.mat = NULL, sig.level = 0.05,
+  insig = c("pch", "blank"), pch = 4, pch.col = "black",
+  pch.cex = 5, tl.cex = 12, tl.col = "black", tl.srt = 45,
+  digits = 2)
+```
+</div>
+
+물론 모든 변수 사이에 선형 관계가 있는 것은 아니겠지만, 꽤 큰 r 값을 가져 어느 정도의 상관관계가 있다고 생각되는 것들 역시 있었다. 또한, 그 과정에서 예상치 못한 상관관계를 발견하기도 했다.
+
+첫째로, fixed acidity와 citric acid에 대해서는 pH와 이것이 음의 상관관계를 보인 반면, volatile acid에 대해서는 pH와 양의 상관관계를 보였다. pH가 수소 이온의 농도에 음의 로그를 취한 값이라는 걸 고려해볼 때, volatile acidity가 높을수록 와인의 산성이 약해진다는 것이다. 이는 일반적으로 우리가 생각하는 산의 의미와 반대된다. 산점도를 통해 이를 확인하면 아래와 같다.
+
+<div align="center">
+```{r extra2, echo=FALSE}
+library(ggplot2)
+
+f <- function(dataset, x, y, z, opts=NULL) {
+  ggplot(dataset, aes_string(x = x, y = y, color = z)) +
+   geom_point(alpha = 0.3, position = position_jitter(w = 0.01, h = 0.01), size = 2) + geom_smooth(formula = y ~ x, method = 'lm') + scale_color_manual(values = c("firebrick", "darkseagreen3"))
+}
+
+p <- f(wine, "volatile.acidity", "pH", "type")
+p + coord_cartesian(xlim=c(0,1.5), ylim=c(2.5,4)) + xlab("Volatile Acidity") + ylab("pH")
+
+q <- f(wine, "citric.acid", "volatile.acidity", "type")
+q + coord_cartesian(xlim=c(0,1.5), ylim=c(0,1.5)) + xlab("Citric Acid") + ylab("Volatile Acidity")
+```
+</div>
+
+레드 와인과 화이트 와인에 대해 다른 잣대를 들이대야 함이 관찰되기는 하지만, 전체적인 데이터의 분포는 상관계수로부터 예측한 것과 같이 나타났다. 또한 시트르산과 휘발산 사이의 관계를 본 그래프에서, 둘은 음의 상관관계를 보였다. 와인에서 주로 관찰되는 휘발산인 아세트산의 pKa 값이 4.75, 시트르산의 pKa$_1$ 값이 3.15 값을 고려하면, 같은 수의 분자가 있을 때 시트르산이 더 많은 양의 수소 이온을 내는 것이다.
+와인의 발효에 사용되는 효모인 *S.cerevisiae*과 *C.lipolytica* 등을 조사해본 결과, 효모마다 대사산물로서 시트르산과 아세트산을 생성하는 정도가 다름을 확인할 수 있었다. 따라서 한정된 수치의 당을 가지고 아세트산을 많이 만들면 시트르산의 생성량이 감소하므로, 둘 사이엔 음의 상관관계가 나타나는 것으로 생각된다. 추가적으로, 아세트산 생성 비율이 증가할 경우 시트르산 생성 비율이 높을 때보다 수소 이온의 해리도가 감소해 pH가 증가하는 것임을 추측할 수도 있었다. 즉 pH와 휘발산 사이 관계의 교락 요인은 효모의 종류와 아세트산 생성 경로의 활성 정도라고 요약할 수 있다.
+
+
+둘째로 sulfur dioxide 농도가 volatile acidity와 alcohol에는 음의 상관관계, citric acid와 residual sugar에는 양의 상관관계를 가짐을 확인하였다. 이산화황은 미생물 생장을 억제함으로써 혐기성 발효 과정에서의 미생물 생태를 조절하는 데 효과적이라고 알려져 있다. 효모는 다른 박테리아들에 비해 그 저항성이 크며, 이러한 이유로 이산화황은 와인 공정에서 자주 사용된다. 해당하는 결과들을 그래프로 보면 아래와 같다.
+
+<div align="center">
+```{r extra3, echo=FALSE}
+par(mfrow = c(2,2), no.readonly = T)
+
+plot(wine$total.sulfur.dioxide, wine$volatile.acidity, xlab = "Total Sulfur Dioxide", ylab = "Volatile Acidity")
+plot(wine$total.sulfur.dioxide, wine$citric.acid, xlab = "Total Sulfur Dioxide", ylab = "Citric Acid")
+plot(wine$total.sulfur.dioxide, wine$alcohol, xlab = "Total Sulfur Dioxide", ylab = "Alcohol")
+plot(wine$total.sulfur.dioxide, wine$residual.sugar, xlab = "Total Sulfur Dioxide", ylab = "Residual Sugar")
+```
+</div>
+
+여기서 흥미로운 것은 효모의 에탄올 발효 과정과 아세트산 형성 과정에서, 반응물인 당과 시트르산은 sulfur dioxide가 증가할수록 증가하는 경향성을 보이는 반면, 생성물인 알코올과 휘발산은 감소하는 경향성을 보인다는 점이다. 따라서 효모의 대사 과정을 sulfur dioxide가 억제한다는 이론적 내용을 확인할 수 있다. 
+
+즉 앞선 논의를 종합해보면 <u>기타 연구 가설</u>에서 이야기한 바와 같이 효모의 활성이 다양한 변수들의 관계를 연결해주는 가장 중요한 요소이며, 이산화황은 이와 직접적인 연관을 맺기에 히트맵에서 볼 수 있듯 거의 모든 변수들과 어느 정도 이상의 상관관계를 보이고 있다. 추가적인 분석과 매커니즘 증거의 조사를 통해 이를 보일 예정이다.
+
+분석을 통해 이를 확인할 경우, 와인을 양조하는 데 필요한 재조합 효모를 생산하는 것과 첨가할 이산화항의 농도를 결정하는 데 큰 도움을 줄 것으로 보인다. 특히나 <u>와인 품질 가설</u>과 이를 결합시킬 경우, 최적의 품질을 위해 활성시켜야 할 효모의 대사 경로를 확인할 수 있다. 따라서 유전자 재조합이나 합성생물학 등의 방법을 이용해 와인 생성에 최적화된 상업용 효모를 개발해낼 수 있을 것으로 생각된다. 이는 안정적인 와인 생산에 큰 도움을 줄 수 있을 것이다.
+
+<br>
+
+### 4. 프로젝트 일정표
+3/28~4/10 : 첫 회의, 가설 설정, 일정 및 역할 조율, 탐색적 자료 분석 및 제안서 작성/제출
+
+4/11~4/24 : 중요 변수 정리, 이들에 대한 분석 진행, 경과보고서 작성
+
+4/25~5/1 : 품질 및 타입 설명을 위한 모델 제안
+
+5/2~5/15 : 품질 및 타입 설명을 위한 모델 확인, 경과보고서 작성 및 제출
+
+5/16~5/29 : 모델 평가, train 파일을 이용한 기능 확인,  test 파일을 이용한 품질 및 타입 추측
+
+5/30~6/4 : 최종보고서 작성 및 제출
+
+<br>
+
+### 5. 각 조원의 예상 역할
+권이태 : 제안서 및 보고서의 R markdown 작성, 자료 정리 및 데이터 시각화, 데이터 분석 도움
+       
+김예원 : 와인 품질 가설 코드 작성 및 분석, 모델 신뢰성 분석, 와인 품질 예측, 변수에 대한 탐색적 자료 분석 
+       
+김태희 : 기타 연구 가설 코드 작성 및 분석, 모델 신뢰성 분석, 와인 타입 예측, 기타 연구 가설 관련 데이터 시각화
+
+<br>
+
+### 6. 참고 문헌
+a. Guy N. B. (1951). Basic Effects of Sulfur Dioxide on Yeast Growth. *Am J Enol Vitic*. **2**. 43-53.
+
+b. Farouk A.H. *et al*. (1981). Fermentative Production of Citric Acid by Yeasts. *Agricultural Wastes*. **3**(1). 21-33.
