@@ -1,0 +1,327 @@
+---
+title: "와인품질 예측 경과보고서"
+author: "권이태, 김예원, 김태희"
+date: '2021년 5월 14일'
+output: 
+  pdf_document:
+    latex_engine : xelatex
+mainfont: NanumGothic
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. 연구가설에 대한 자세한 소개
+
+ **<u>와인 품질 가설</u>** : 변수의 값이 각 변수의 중앙값에 가까울수록 quality가 높을 것이다.  
+ 
+ 와인 품질의 예측을 위해 크게 neural network, KNN, decision tree, random forest의 네 가지 방법을 사용하였다. 기존에 quality 별로 각 변수에 대한 상자 그림을 그려보았을 때, 명확한 선형관계보다는 비선형적 관계가 나타났다. 따라서 가설에서 기준을 '중앙값으로부터 떨어진 정도'로 잡아 이를 해결하고자 하였다. 분석 결과 중요한 변수는 대표적으로 밀도와 알코올, 시트르산과 휘발성산 등이 있었으며, 이는 추가 분석을 통해 확실히 결정되어야 할 것으로 생각된다. 측도로는 정확도와 RMSE를 사용하였으며, 현재 진행한 분석방법에서는 정확도가 작을수록 RMSE 역시 작게 나타나 둘 모두가 좋은 측도라고 생각할 수 있었다. 실제로도 와인 정확도를 최대한 가깝게 추정할수록 그 알고리즘의 효율이 높은 것이기에, RMSE는 사용할 만한 좋은 평가 기준이라 생각된다.
+
+
+ **<u>기타 연구 가설</u>** : 변수 간의 관계에서 중요한 교락 요인은 '효모의 활성'이며, 이산화황은 이를 조절한다.  
+ 
+ 효모에 의해 당은 알코올로 발효되고,  시트르산은 휘발산으로 분해된다. 이산화황은 일반적으로 효모의 활성을 억제하기에, 와인 양조 과정에서 첨가해준 이산화황의 양에 따라 당과 시트르산이 분해되는 정도가 다를 것이라 추측할 수 있다. 즉, 다양한 변수들 사이의 관계에 있어 이산화황은 교락요인으로 기능한다. 
+ 이를 입증하기 위하여, `train.csv` 파일에서 주어진 데이터를 이산화황의 양에 따라 4개의 블록으로 나누고, 각각의 데이터셋에서 당과 알코올의 관계와 시트르산과 휘발산의 관계를 알아보았다. 또한 다중회귀분석을 통해 이산화황의 양이라는 교락 요인이 통제되었을 때 당과 알코올의 관계와 시트르산과 휘발산의 관계를 파악할 수 있었다. 
+ 
+ 회귀분석 모델의 우수성을 측정하는 측도로는 모델이 데이터의 어느 정도를 설명할 수 있는지 나타내는 adjusted R-squared를 사용할 수 있는데, 이는 독립변수의 갯수가 늘어나면 그 값이 커지는 R-squared의 단점을 보완했기 때문에 우수성을 평가하는 측도로 적절하다.
+
+
+## 2-(가). 중간분석 결과 - 와인 품질 가설  
+
+첫째로는 라이브러리 `nnet`을 이용하여 신경망을 구축함으로써 예측을 시도하였다. 이때, 여러 회 반복하여 최빈값을 구해 예측하는 경우에 정확도와 RMSE가 더 적게 나타남이 관찰되었다.
+```{r ANN1, echo=FALSE, figure.height = 10, out.width="50%", warning = F, message=F, results = F}
+library(Metrics)
+library(hardhat)
+library(lattice)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape)
+library(usethis)
+library(ROCR)
+library(caret)
+library(MASS)
+library(NeuralNetTools)
+library(tidyverse)
+library(gridExtra)
+library(grid)
+library(png)
+library(downloader)
+library(grDevices)
+library(nnet)
+
+normalize <- function(x){
+  return((x-min(x))/(max(x)-min(x)))
+}
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+wine <- read.csv("train.csv")
+# Standardization of each column of wine
+for (i in 3:13){
+  wine[,i] = standardize(wine[,i])
+}
+wine <- wine[, 2:14]
+wine$quality <- as.factor(wine$quality)
+
+wineClass <- split(wine, wine$type)
+redwine <- wineClass[1]
+redwine <- as.data.frame(redwine)
+redwine <- redwine[, c(1:12)]
+whitewine <- wineClass[2]
+whitewine <- as.data.frame(whitewine)
+whitewine <- whitewine[, c(1:12)]
+
+library(caTools) 
+set.seed(3)
+
+idx <- sample(x = c("train", "valid", "test"), size = nrow(redwine), replace = T, prob = c(3, 1, 1))
+
+train <- redwine[idx == "train", ] 
+valid <- redwine[idx == "valid", ] 
+test <- redwine[idx == "test", ]
+```
+
+```{r ANN2, echo=FALSE, out.width="50%", warning = F, message=F, results = F}
+set.seed(5)
+rnumNN <- function(n, data){
+  s <- rep(0,n)
+  for (i in 1:n){
+    nn.wine <- nnet(formula = red.quality~., data = train, size = 10, maxit=1000, decay = 0.0005)
+    s <- cbind(s,predict(nn.wine, newdata=data, type="class"))
+    }
+    s <- as.data.frame(s)
+    t <- rep(0,n)
+    l = nrow(data)
+    for (j in 1:l){
+      t[j] <- getmode(s[j,])
+    }
+    t <- as.numeric(t(t))
+  return (t)
+}
+
+t <- rnumNN(10, test)
+```
+
+```{r ANN3, echo=FALSE, fig.height=10, warning = F, message=F}
+library(formattable)
+library(knitr)
+
+ts <- as.numeric(test$red.quality) + 2
+i <- t(table(test$red.quality, t))
+kable(i, col.names = c('3', '4', '5', '6', '7', '8', '9'))
+paste("Accuracy of ANN is ", accuracy(test$red.quality,t), " / RMSE of ANN is ", rmse(ts, as.numeric(t)))
+```
+
+```{r ANN4, echo=FALSE, fig.align = "center", out.width="50%", warning = F, results = F, message=F}
+
+idy <- sample(x = c("train", "valid", "test"), size = nrow(whitewine), replace = T, prob = c(3, 1, 1))
+
+train <- whitewine[idy == "train", ] 
+valid <- whitewine[idy == "valid", ] 
+test <- whitewine[idy == "test", ]
+
+wnumNN <- function(n, data){
+  s <- rep(0,n)
+  for (i in 1:n){
+    nn.wine <- nnet(formula = white.quality~., data = train, size = 10, maxit=1000, decay = 0.0005)
+    s <- cbind(s,predict(nn.wine, newdata=data, type="class"))
+    }
+    s <- as.data.frame(s)
+    t <- rep(0,n)
+    l = nrow(data)
+    for (j in 1:l){
+      t[j] <- getmode(s[j,])
+    }
+    t <- as.numeric(t(t))
+  return (t)
+}
+
+t <- wnumNN(10, test)
+
+library(formattable)
+library(knitr)
+
+ts <- as.numeric(test$white.quality) + 2
+i <- t(table(test$white.quality, t))
+kable(i, col.names = c('3', '4', '5', '6', '7', '8', '9'))
+paste("Accuracy of ANN is ", accuracy(test$white.quality,t), " / RMSE of ANN is ", rmse(ts, as.numeric(t)))
+```
+결론적으로, 이 경우 정확도는 0.66, RMSE는 0.67로 나타났다.
+
+그 다음으로는, ANN 분석 결과 상관관계가 높다고 생각된 변수들을 따로 뽑아 KNN을 진행하였다. 이때, 다양한 `k` 값에 대해 분석을 진행한 후 검증자료에 대해 가장 높은 정확도를 보이는 `k`값인 44를 이용해 평가자료의 예측에 사용하였다.
+
+```{r KNN1, echo=FALSE, out.width="50%", warning = F, message=F, results = F}
+collectNN <- function(n){
+  w <- rep(0,11)
+  ret <- 0
+  for (i in 1:n){
+    nn.wine <- nnet(formula = white.quality~., data = train, size = 10, maxit=1000, decay = 0.0005)
+    v <- olden(nn.wine)
+    w <- w + v$data$importance
+  }
+  w <- abs(w)
+  for (j in 1:11){
+    if (w[j] >= 1000){
+      ret <- c(ret, j+1)
+    }
+  ret <- ret[2:length(ret)]
+  }
+  return (ret)
+}
+
+ret <- collectNN(10)
+```
+
+```{r KNN2, echo=FALSE, out.width="50%", warning = F, message=F}
+
+library(class)
+library(gmodels)
+library(scales)
+library(lattice)
+library(ggplot2)
+library(Metrics)
+library(MASS)
+train <- whitewine[idy == "train", ] 
+valid <- whitewine[idy == "valid", ] 
+test <- whitewine[idy == "test", ]
+
+Ntrain <- train[, ret]
+trainLabels <- as.vector(train[,1])
+Ntest <- test[, ret]
+valid_x <- valid[, ret]
+valid_y <- valid[,1]
+
+# 분류 정확도 사전 할당 
+accuracy_k <- NULL 
+# kk가 1부터 train 행 수까지 증가할 때 (반복문) 
+for(s in c(1:100)){ 
+  # k가 kk일 때 knn 적용하기 
+  set.seed(1234) 
+  knn_k <- knn(train = Ntrain, cl = trainLabels, test = valid_x, k = s) 
+  # 분류 정확도 계산하기 
+  accuracy_k <- c(accuracy_k, sum(knn_k == valid_y) / length(valid_y)) } 
+# k에 따른 분류 정확도 데이터 생성 
+valid_k <- data.frame(k = c(1:100), accuracy = accuracy_k) 
+# 분류 정확도가 가장 높으면서 가장 작은 k는?
+paste("Selection for k is", min(valid_k[valid_k$accuracy %in% max(accuracy_k), "k"]))
+
+knn.wine <- knn(train = Ntrain, cl=trainLabels, test = Ntest, k=44)
+j <- t(table(test$white.quality, knn.wine))
+kable(j, col.names = c('3', '4', '5', '6', '7', '8', '9'))
+paste("Accuracy of KNN is ", accuracy(test$white.quality, knn.wine), "/ RMSE of KNN is ", rmse(as.numeric(test$white.quality), as.numeric(knn.wine)))
+```
+그 결과 위처럼 정확도는 0.51, RMSE는 0.84가 나왔으며, ANN에 비해 기대에 미치지 못하는 수치였다. 따라서, 변수 재선택 등이 필요할 것으로 생각된다.
+
+
+또한 random forest를 이용한 분석 역시 진행하였으며, 데이터가 비선형적이기에 가장 좋은 효율을 보여줄 것이라 추측되었다.
+```{r RF1, echo=FALSE, out.width="50%", warning = F, message=F}
+train<-read.csv("train.csv")
+
+index<-train$index
+quality<-train$quality
+dif.fixed.acidity<-abs(train$fixed.acidity-median(train$fixed.acidity))
+dif.volatile.acidity<-abs(train$volatile.acidity-median(train$volatile.acidity))
+dif.citric.acid<-abs(train$citric.acid-median(train$citric.acid))
+dif.residual.sugar<-abs(train$residual.sugar-median(train$residual.sugar))
+dif.chlorides<-abs(train$chlorides-median(train$chlorides))
+dif.free.sulfur.dioxide<-abs(train$free.sulfur.dioxide-median(train$free.sulfur.dioxide))
+dif.total.sulfur.dioxide<-abs(train$total.sulfur.dioxide-median(train$total.sulfur.dioxide))
+dif.density<-abs(train$density-median(train$density))
+dif.pH<-abs(train$pH-median(train$pH))
+dif.sulphates<-abs(train$sulphates-median(train$sulphates))
+dif.alcohol<-abs(train$alcohol-median(train$alcohol))
+
+train1<-data.frame(index,quality,dif.fixed.acidity,dif.volatile.acidity,dif.citric.acid,dif.residual.sugar,dif.chlorides,dif.free.sulfur.dioxide,dif.total.sulfur.dioxide,dif.density,dif.pH,dif.sulphates,dif.alcohol)
+
+
+library(caret)
+set.seed(1000)
+intrain<-createDataPartition(y=train1$quality,p=0.7,list=FALSE)
+traindata<-train1[intrain,]
+testdata<-train1[-intrain,]
+
+library(randomForest)
+
+asd<-randomForest(quality~.,data=traindata)
+traindata$quality<-as.factor(traindata$quality)
+sdf<-randomForest(quality~.,data=traindata)
+
+kable(table(testdata$quality, predict(sdf,newdata=testdata)), col.names = c('3', '4', '5', '6', '7', '8', '9'))
+ac <- accuracy(testdata$quality, predict(sdf, newdata=testdata))
+u <- as.numeric(predict(sdf, newdata=testdata)) + 2
+rm <- rmse(as.numeric(testdata$quality), u)
+paste("Accuracy of RF is ", ac, "/ RMSE of RF is ", rm)
+```
+정확도는 0.62, RMSE는 0.72였으며, 조금의 개선을 더욱 거치면 더 좋은 효율을 보여줄 것이라 생각된다. 아래는 표를 시각화한 그래프이다.
+
+<center>
+```{r RF2, echo=FALSE, out.width="50%", warning = F, message=F, fig.align = "center"}
+library(ggplot2)
+testdata$pred<-predict(sdf,newdata=testdata)
+ggplot(testdata,aes(quality,pred,color=quality))+
+  geom_jitter(width=0.2,height = 0.1,size=2)+
+  labs(title = "confusion matrix",
+       subtitle = "Predicted vs Observed",
+       y="Predicted",
+       x="Observed")
+```
+</center>
+
+## 2-(나). 중간분석 결과 - 기타 연구 가설 
+위 4개의 그래프는 이산화황 농도에 따른 잔당과 알코올의 상관관계를, 아래 4개의 그래프는 이산화황 농도에 따른 시트르산과 휘발산의 분포를 나타낸다. 이들 사이에 차이가 관찰되기는 하나, 이를 분석하기 위해서는 블록을 더 세분화하거나, 다중회귀분석을 이용하는 등 추가적인 분석이 필요할 것으로 보인다.
+
+
+```{r ETC1, echo=FALSE, out.width="60%", warning = F, message=F, fig.align = "center"}
+train<-read.csv("train.csv")
+
+a<-subset(train,train$total.sulfur.dioxide<=78)
+b<-subset(train,78<train$total.sulfur.dioxide&train$total.sulfur.dioxide<=118)
+c<-subset(train,118<train$total.sulfur.dioxide &train$total.sulfur.dioxide<=155)
+d<-subset(train,train$total.sulfur.dioxide>155)
+
+par(mfrow=c(2,2))
+
+plot(a$residual.sugar,a$alcohol)
+a_model<-lm(a$alcohol~a$residual.sugar,a)
+abline(a_model,col="red")
+plot(b$residual.sugar,b$alcohol)
+b_model<-lm(b$alcohol~b$residual.sugar,b)
+abline(b_model,col="red")
+plot(c$residual.sugar,c$alcohol)
+c_model<-lm(c$alcohol~c$residual.sugar,c)
+abline(c_model,col="red")
+plot(d$residual.sugar,d$alcohol)
+d_model<-lm(d$alcohol~d$residual.sugar,d)
+abline(d_model,col="red")
+
+
+par(mfrow=c(2,2))
+plot(a$citric.acid,a$volatile.acidity)
+A_model<-lm(a$citric.acid~a$volatile.acidity,a)
+abline(A_model,col="red")
+plot(b$citric.acid,b$volatile.acidity)
+B_model<-lm(b$citric.acid~b$volatile.acidity,b)
+abline(B_model,col="red")
+plot(c$citric.acid,c$volatile.acidity)
+C_model<-lm(a$citric.acid~a$volatile.acidity,c)
+abline(C_model,col="red")
+plot(d$citric.acid,d$volatile.acidity)
+D_model<-lm(d$citric.acid~d$volatile.acidity,d)
+abline(D_model,col="red")
+
+```
+
+
+## 3. 향후분석 계획
+#### 3-(가). 와인 품질 가설
+현재는 중앙값으로부터 떨어진 정도를 어떻게 처리할지를 결정하지 못해, 대부분의 분석을 주어진 변수값으로만 진행하였다. 데이터 분포의 특성을 조금 더 분석한 이후, 어떤 전처리를 하고 분석을 진행할지 결정하는 과정이 필요하다 생각된다. 또한 KNN의 경우 정확도가 비교적 낮은 것으로 판단되어, 추후 분석에서는 제외할 것이다. 따라서 ANN과 랜덤포레스트 기반으로 진행해야 하는데, ANN은 처리 시간이 오래 걸리고 더 좋은 패키지로의 전환이 어려울 것으로 생각되어 랜덤포레스트를 조금 더 발전시켜보고자 한다. 경과보고서에서는 랜덤포레스트를 classification 타입으로 분석하여 테스트 셋의 quality를 예측하였는데, regression 타입으로도 랜덤포레스트를 시행하여 어떤 차이가 있는지, 예측의 정확도를 높일 수 있을지 분석할 계획이다.
+
+
+
+#### 3-(나). 기타 연구 가설
+단순회귀분석으로는 많은 양의 데이터를 설명하기는 어려워 보인다. 특히나, 데이터가 구형으로 뭉쳐 있는 경향성을 보여 더욱이 선형회귀분석이 어려울 것으로 예상되었다. 또한 이산화황이 효모만이 아니라 효모와 경쟁하는 다른 미생물들과도 경쟁한다는 점으로부터 미루어 볼 때, 그 관계는 간단하게는 설명할 수 없는 비선형 모델을 따른다고 생각된다. 따라서, 비선형 회귀분석을 통해 adjusted R-squared의 값이 크고 MSE가 작은 새로운 모델을 만들어 보고자 한다. 이를 통해 이산화황이 과연 매우 중요한 교락 요인으로 작용하는 것이 맞는지, 혹은 변수들에 별 영향을 미치지 않고 와인에 향만을 추가할 뿐인지에 대해 판단할 수 있을 것이다.
+
