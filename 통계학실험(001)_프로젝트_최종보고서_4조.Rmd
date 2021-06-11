@@ -1,0 +1,784 @@
+---
+title: "와인품질 예측 결과보고서"
+author: "권이태, 김예원, 김태희"
+date: "`r Sys.Date()`"
+output:   
+  pdf_document:
+    latex_engine : xelatex
+  html_document:
+mainfont: NanumMyeongjo
+highlight: tango
+---
+
+---
+
+# 1. 서론
+|  최근 MZ세대(1981년~2010년 출생한 이들을 이르는 신조어)가 주요 소비층으로 급부상한 가운데, 주류 산업의 지형 역시 이에 맞춰 급변하고 있다. 이마트24가 공개한 2021년 1~2월 주류 구매 실적에 따르면 와인 매출은 전년 동기 대비 209% 증가하였으며, 해당 성장세에는 MZ세대의 5만원 이하의 중저가 와인 소비량 증가가 주요한 것으로 알려졌다[1-3]. 가성비(가격에 대한 성능 비)를 중시하는 MZ세대의 특성상, 소주와 맥주로 대표되던 기존 주류들과는 달리 고급스러운 분위기를 낼 수 있는 와인이 인기를 끌었다는 것이다. 이처럼 요즈음엔 레스토랑에서 소믈리에와 함께 와인을 즐기는 것이 아니라 집에서 간편하게 와인을 즐기는 '홈술' 문화가 정착하고 있다. 그러나 와인에 대한 전문적인 지식 없이 와인의 품질을 판단하는 것은 불가능하기에, 가정이나 매장에서 와인 품질을 간단하게 평가할 수 있는 기술의 필요성은 더욱 커지고 있다. 
+
+|  이 프로젝트에서는 이러한 수요에 맞추어 와인의 다양한 화학적/물리적 특성을 이용해 와인의 품질을 예측하는 모델을 구축하고자 하였다. 휘발산, 시트르산, 이산화황, 알코올 등은 그 양을 간단히 측정할 수 있을 뿐더러 와인의 맛과 향, 숙성에 중요하다고 알려져 있다. 또한, 우리가 와인을 평가할 때 중량감을 그 중요한 기준으로 여긴다는 점에서 밀도도 중요한 기준이 될 것이다. 이때 화합물들이 너무 많거나 밀도가 너무 높을 경우와 그 반대의 경우 모두 음용자에게 거부감을 줄 수 있다는 점에서, 각 수치들이 각각의 중앙값에 가까울수록 품질이 높을 것이라는 가설을 기반으로 분석을 진행하였다. 탐색적 자료 분석을 통해 와인 품질에 따른 각 변수들의 중간값과의 차이를 시각화하고 이를 상관분석해 가설이 예측에 적절한 수단임을 보였으며, 레드 와인과 화이트 와인을 분리하여 변수들의 산점도를 그림으로써 각각을 분리해 분석하는 것이 합당함을 확인하였다. 이후 랜덤포레스트에서 적절한 트리 수와 분기 수를 이용해 와인 품질 예측을 수행하였으며, 평가 자료에서 약 65%의 정확도를 얻어냈다. 범위를 넓힐 경우 약 95% 이상의 정확도를 얻어냈기에, 해당 예측 방법은 충분히 사용될 가능성이 있을 것으로 생각된다.
+
+|  와인 소비와 품질 평가에 대한 수요가 늘어남과 동시에, 가정이나 영세상인들의 수제 와인 양조 역시 꾸준히 진행되고 있다. 특히 기획재정부가 '2018 세법 후속 시행령 개정안 마련'에서 소규모주류제조면허 대상에 과실주를 포함하기로 결정한 것이 결정적이었다[5]. 이에 따라 기존 와인 양조업계는 경쟁력을 얻기 위해, 개인들은 자신의 입맛에 맞는 와인을 양조하기 위해 와인 양조 시 첨가해야 하는 물질들에 대한 연구를 계속 진행하고 있다. 그 중 대표적인 것이 적절한 이산화황의 농도에 대한 논의다. 프레스크 아이슬 와인협회(Presque Isle Wine Cellars)는 이산화황이 와인 저장에 도움을 주며 몇몇 효모와 아세트산 박테리아, 젖산 박테리아의 생장을 방해한다고 언급하고 있다[6]. 이산화황은 효모와 같은 혐기성 생물들의 대사 과정에서 자주 발견되는 물질로, 그 농도는 이들의 활성에 주로 억제하는 방향으로 큰 영향을 미친다[7]. 발효 과정에서 효모는 와인의 품질에 관여하는 모든 화학물질의 대사를 담당하며, 이는 곧 효모와 다른 박테리아들의 활성 정도 조절이 와인의 맛을 결정하는 아주 중요한 요인이라는 것이다. 예를 들어, 만약 산미가 풍부한 와인을 양조하고자 한다면, 효모의 시트르산 대사량에 이산화황이 어떤 영향을 미치는지 확인한 이후, 와인의 시트르산 양이 가장 많게 되는 농도의 이산화황을 넣음으로써 산미를 임의로 조절할 수 있을 것이다[8-9]. 이처럼 이산화황의 농도를 조절하면 미생물들의 활성을 조절함으로써 와인으로 하여금 원하는 맛과 향을 가지도록 할 수 있다.
+
+|  이 보고서의 기타 연구 가설은 이러한 예측을 직접 확인하고 이산화황 농도에 따른 각 성질들의 차이를 분석하기 위하여, 교락 요인인 '효모의 활성'을 조절하는 주요 변수가 이산화황이라는 가설을 세웠다. 그 다음, 탐색적 자료 분석을 통해 효모의 활성과 관련되어 있다고 알려진 변수들과 이산화황에 대하여 상관관계를 맺고 있는 변수인 시트르산, 휘발산, 잔당, 알코올을 발굴하였다. 이들에 대하여 이산화황의 양에 따라 각각의 양, 그리고 비율이 어떻게 달라지는지 확인하였고, 이를 통해 각각의 양을 조절하기 위해 이산화황의 양을 어떻게 해야 하는지를 분석하였다. 이러한 결과는 바디감, 중량감 등의 다양한 와인의 특성과 이산화황의 양이 어떤 관계를 맺고 있는지에 대한 기초적인 식견을 제공함으로써 다양한 와인의 양조에 도움이 될 것이다.
+
+# 2. 분석의 주요목적
+## 2-1. 와인 품질 가설
+<br>
+ **<u>와인 품질 가설</u>** : 변수의 값이 각 변수의 중앙값에 가까울수록 quality가 높을 것이다.  
+ 
+|  와인의 밀도, 이산화황, 시트르산 등은 너무 적으면 와인의 풍미와 식감을 저해하여 맛이 없게 만들지만, 너무 많을 경우에는 거부감을 일으킬 수도 있다. 이 보고서에서는 위와 같은 일반적인 상식을 통계적으로 보이고자 했다. 특히, 우리는 그 적정치를 중앙값이라고 둔 후 각 변수가 그들의 중앙값으로부터 얼마나 떨어져 있는지가 품질에 큰 영향을 미치며, 그 절댓값이 클수록 품질은 낮아짐을 보이고자 했다. 이후 이를 기반으로 다양한 예측 방법을 통해 와인의 품질을 높은 정확도로 예측하고자 했으며, 오차가 나더라도 큰 문제가 없도록 RMSE 역시 낮은 모형을 추구하였다. 와인의 품질은 음용자의 취향에도 기반하며 이러한 기술이 사용될 주 영역은 고급 레스토랑이 아니라 온라인 쇼핑몰 등이라 예상하였기에, 다양한 방법의 적용을 통해 0.6 이상의 정확도를 얻고자 하였다.
+
+| 그러나 분석 과정에서 데이터 처리를 하면 중앙값으로부터 해당 값이 얼마나 떨어져 있는지를 기반으로 분석하게 되는데, 이 경우 대소에 대한 정보가 사라진다는 큰 단점이 있었다. 즉 중앙값이 50인 자료에 대해서 0과 100이 동일하게 처리되는 것이다. 또한, 최적의 와인이 가지고 있는 변수들의 양이 과연 중앙값인지에 대해서는 잘 알려져 있지 않기에, 중앙값에 대하여 자료를 처리하는 것은 비합리적일 수 있다. 이와 더불어 학습에 이용될 자료 크기가 제한되어 있으며 높은 복잡도의 분석 프로그램을 돌릴 만한 하드웨어적 여건이 되지 않기에 높은 정확도로 와인 품질을 추측하기에는 무리가 있다. 이는 3이나 9와 같이 그 품질의 와인 수가 적어 특징을 파악하기 어려운 경우에 더욱 두드러진다.
+
+## 2-2. 기타 연구 가설
+
+<br>
+ **<u>기타 연구 가설</u>** : 변수 간의 관계에서 중요한 교락 요인은 '효모의 활성'이며, 이산화황은 이를 조절한다.
+ 
+|  기존 연구와 와인 관련 사이트들로부터 이산화황이 와인 양조에 주요한 요인임을 파악하였다. 여기서 보이고자 한 것은 크게 두 개로, 첫째는 이산화황 그 자체가 다양한 변수의 양에 영향을 미친다는 것이다. 와인에 포함된 물질들은 원래 포도에 포함된 물질, 첨가되는 물질, 발효 결과 형성되는 물질로 구분할 수 있을 것이다. 이 중 조절하기 가장 쉬운 것은 첨가되는 물질인 이산화황으로, 이에 따라 효모의 활성이 달라지며 반응물들과 생성물들의 양을 보일것이다. 여기서는 상관분석과 산점도의 확인을 통해 이를 확인하고자 했다. 둘째는 이산화황이 발효에 미치는 영향이다. 발효는 혐기성 상태에서 효모에 의해 주로 매개되며, 반응물과 생성물의 비를 조절하는 것은 보통 이들이 가진 생화학적 경로의 활성이다. 따라서 이산화황이 효모의 활성에 영향을 미친다면 생성물과 반응물 간의 비율이 달라질 것이다. 따라서 교락 요인인 이산화황을 통제하고 시트르산/휘발산, 알코올/당의 관계를 봄으로써 와인 양조 중의 효모도 실험실에서의 그것과 동일한 이산화황에의 감수성을 가지고 있는지, 혹은 다른 요인 때문인지 확인하고자 했다.
+
+|  그러나 앞서 언급된 문제와 같이 이 경우에도 학습에 이용될 자료 크기가 제한되어 있으며 분석 지식과 하드웨어의 부족이 있었다. 또한 이와 같이 반응물과 생성물의 관계를 보기 위해서는 초기 상태 역시 모두 같다는 가정이 있어야 한다. 예를 들어, 모두 같은 양의 시트르산을 포함한 포도를 이산화황의 양을 달리해 가며 양조하였다면, 양조된 와인의 시트르산/휘발산 비는 그 활성에 대한 좋은 근거이다. 허나, 시트르산이 원래 많은 포도를 발효시킬 경우에는 시트르산이 적은 포도를 사용하였을 때보다 양조된 와인의 시트르산 양과 휘발산 양이 모두 많을 것이기에 이산화황의 영향이 가려진다. 여기서는 그 비율을 확인함으로써 그 효과를 최대한 줄여보고자 하였지만, 와인 양조장 내부의 환경은 실험실과 달리 다양한 물질이 혼재해 있고 그 반응식을 정확히 알 수 없기에 이것이 완전히 해결될 수는 없을 것이다.
+<br>
+<br>
+<br>
+<br>
+<br>
+ 
+# 3. 분석방법
+## 3-1. 데이터 코드북
+<br>
+```{r, echo = F, fig.align='center', warning=F}
+library(knitr)
+set.seed(1000)
+Variable <- c('quality', 'fixed acidity', 'volatile acidity', 'citric acid','residual sugar','chlorides','free sulfur dioxide','total sulfur dioxide', 'density', 'pH', 'sulphates', 'alcohol', 'type')
+Description <- c("품질; 와인의 종합적인 품질", "고정산; 와인에 포함된 비휘발성 산의 총량", "휘발산; 와인에 포함된 휘발성 산의 총량", "시트르산; 와인에 포함된 시트르산의 총량", "잔당; 발효 이후 와인 속에 포함된 잔당", "염화물; 염화물의 양", "자유 이산화황; 분자 혹은 이온 상태로 존재하는 이산화황의 양", "총 이산화황; 자유 이산화황과 다른 분자에 결합한 부착 이산화황의 합", "밀도; 부피에 대한 질량의 비", "pH; 수소이온 농도에 음의 로그를 취한 값", "황산염; 황산염의 양", "알코올 도수", "와인 종류(red = 적색/레드 와인, white = 백색/화이트 와인)")
+s <- data.frame(Variable, Description)
+kable(s)
+```
+
+## 3-2. 와인 품질 예측
+<br>
+ 
+|  와인의 품질을 예측하기 위해 세운 가설인 '각 변수의 중앙값에 가까울수록 품질이 높을 것이다'는 과도한 산미나 부족한 중량감이 와인의 맛을 해칠 수 있다는 일반적 상식으로부터 비롯한 것이었다. 따라서 먼저 탐색적 자료 분석을 통해 데이터가 이러한 예측을 따르는지 확인하고자 하였다. 중앙값과의 차이의 절댓값을 새로운 변수에 할당한 후, 품질에 따른 그 분포를 상자 그림으로써 시각화하고 상관분석을 통해 가설이 합당한지 사전 검증하였다. 이때 중앙값을 이용한 이유는 각 변수들로부터 차이 절댓값의 합이 가장 작은 값이 중앙값이기 때문이다. 또한, 후의 분석을 위하여 주어진 `train.csv`의 데이터를 예측 모델의 설립에 사용할 학습용 자료와 평가용 자료로 8:2 비율 하에 분리하였다.
+
+|  랜덤 포레스트는 와인 품질과 같은 범주형 자료의 값를 예측하는 데 많이 사용되는 분석 기법으로, 여러 개의 의사결정나무를 무작위로 형성하여 분류를 진행한다. 이 보고서에서는 학습용 자료를 바탕으로 구성한 랜덤포레스트를 이용하여 평가용 자료에서 품질을 예측하고, 이를 실제 품질과 비교하여 정확도와 RMSE(Root Mean Square Error)를 도출하였다. 또한 해당 과정에서 만드는 의사결정나무의 개수와 분기의 개수를 바꾸어가며 이들을 평가하였으며, 그 결과 가장 높은 효율을 보여주는 모델을 선택하고자 하였다. 이와 더불어, 와인 품질에 큰 영향을 미치는 변수가 무엇인지 역시 확인하였다. 이러한 분석을 바탕으로 최적의 의사결정나무 개수와 분기수를 선택하였다. 위의 랜덤포레스트 분석은 패키지 `randomForest`를 이용해 진행하였으며, 패키지 `Metrics` 등이 사용되었다.
+
+|  인공신경망은 실제 동물의 신경망을 본따 만든 학습 알고리즘으로, 관측값들을 이용해 각 층 간의 연결을 조정하고 이를 바탕으로 평가자료의 값을 예측한다. 여기서는 앞서 전처리한 자료를 이용해 패키지 `nnet`에서 제공하는 함수로써 모형 구축과 예측을 수행하였다. 이때, 랜덤포레스트에서 의사결정나무를 여러 개 만들어 예측하듯 신경망을 여러 개 만든 이후 그 최빈값을 예측값으로 설정함으로써 오차율을 줄이고자 했다.
+
+## 3-3. 기타 연구 가설: 와인 양조에서의 이산화황의 역할
+
+| 와인 종류를 제외한 수치형 변수들에 대해 히트맵을 그려 각각의 상관계수가 얼마나 되는지와 그것이 유의한지를 확인하고, 매커니즘 증거와 일치하는지를 검증하였다. 또한, 이산화황이 각 변수들의 관계에 어떤 영향을 미치는지 확인하기 위해서 상관분석을 이용하여 그 양에 따른 시트르산, 휘발산, 잔당, 알코올의 양을 분석하였다. 이때, 와인의 종류에 따라 그 경향성이 다를 것이라 예측하여 `type`을 기준으로 나누어 분석했으며, whisker range를 벗어나는 것들은 데이터에서 제거한 후 총 이산화황과 자유 이산화황 모두에 대해 시행하였다. 이후 분석하고자 하는 화학 반응이 반응물의 주 사용처이자 생성물의 주 생성 원인임을 보기 위하여 이산화황의 농도에 따라 4개 블록으로 블록화한 후 ANOVA를 시행하였다. 또한, 다중회귀를 통해 이산화황 농도가 일정할 때 당과 알코올, 시트르산과 휘발산의 비율 변화를 비교하였다.
+
+# 4. 분석결과
+## 4-1. 와인 품질 예측
+## 와인 품질 예측을 위한 탐색적 자료 분석
+<br>
+
+|  본격적인 분석을 진행하기에 앞서, 와인 품질에 따른 변수의 분포를 상자 그림을 통해 시각화하였다(Figure 1). 
+
+```{r, echo=F, fig.align='center', fig.height=2.5, fig.width=6}
+set.seed(1000)
+train<-read.csv("train.csv")
+
+index<-train$index
+quality<-train$quality
+dif.fixed.acidity<-abs(train$fixed.acidity-median(train$fixed.acidity))
+dif.volatile.acidity<-abs(train$volatile.acidity-median(train$volatile.acidity))
+dif.citric.acid<-abs(train$citric.acid-median(train$citric.acid))
+dif.residual.sugar<-abs(train$residual.sugar-median(train$residual.sugar))
+dif.chlorides<-abs(train$chlorides-median(train$chlorides))
+dif.free.sulfur.dioxide<-abs(train$free.sulfur.dioxide-median(train$free.sulfur.dioxide))
+dif.total.sulfur.dioxide<-abs(train$total.sulfur.dioxide-median(train$total.sulfur.dioxide))
+dif.density<-abs(train$density-median(train$density))
+dif.pH<-abs(train$pH-median(train$pH))
+dif.sulphates<-abs(train$sulphates-median(train$sulphates))
+dif.alcohol<-abs(train$alcohol-median(train$alcohol))
+
+abs.train<-data.frame(train$index,train$quality,dif.fixed.acidity,dif.volatile.acidity,dif.citric.acid,dif.residual.sugar,dif.chlorides,
+                   dif.free.sulfur.dioxide,dif.total.sulfur.dioxide,dif.density,dif.pH,dif.sulphates,dif.alcohol)
+
+
+quality1=cut(train$quality,breaks=c(3,4,5,6,7,8,9,10),
+             include.lowest=TRUE,
+             right=FALSE,
+             labels=c("3","4","5","6","7","8","9"))
+
+library(ggplot2)
+windowsFonts(Times=windowsFont("Times New Roman"))
+ggplot(data=abs.train,aes(x=quality1, y=dif.volatile.acidity))+geom_boxplot()+labs(x='Quality', y='Difference from Its Median', caption = '[Figure 1] Box plot of quality and differences of volatile acid content from its median') +  theme(text=element_text(family="Times",size=11))
+```
+
+|  휘발산을 비롯한 다양한 변수들에서는 와인 품질이 높아질수록 그 중앙값과의 차이들이 전체적으로 낮아지는 경향성이 관찰되었으며, IQR 역시 감소해 특정 값에 가까울수록 품질이 높다는 가설과 어느 정도 일치하는 경향성이 나타났다. 즉, 중앙값에 가까울수록 와인 품질이 높다는 가설이 몇몇 변수에 대해서는 옳음을 시각적으로 확인할 수 있었다. 이를 다르게 말하면, 와인 품질과 중앙값과의 차이는 음의 상관관계를 이루어야 한다. 휘발산에 대해 둘 사이의 상관분석을 시행한 결과 상관계수는 -0.205로 음이었고 해당 값은 유의하였으며, 이는 탐색적 자료 분석을 통한 추측을 뒷받침한다.
+
+```{r, include=F}
+set.seed(1000)
+cor.test(as.numeric(quality1), dif.volatile.acidity)
+cor.test(as.numeric(quality1), dif.fixed.acidity)
+cor.test(as.numeric(quality1), dif.citric.acid)
+cor.test(as.numeric(quality1), dif.pH)
+cor.test(as.numeric(quality1), dif.alcohol)
+
+
+n <- rep(0,10)
+for (i in 3:12){n[i-1] <- cor(as.numeric(quality1), abs.train[,i])}
+n
+```
+
+|  와인 종류를 제외한 11개의 수치형 자료에 대해 모두 이와 같은 분석을 진행한 경우에는 시트르산, 고정산을 비롯한 9개의 변수에 대해서는 음 혹은 0에 가까운 상관계수 값이 등장하지만 pH와 알코올에 대해서는 양의 상관관계가 나타났으며, 알코올의 경우에는 상관계수 0.316이 유의하였다(Figure 2). 레드 와인과 화이트 와인에 대해 이런 추세는 유지되었으며, 이는 알코올이 적은 와인은 품질 5~6 가량의 일반적인 평가를 받지만 알코올이 많은 와인은 다른 요인들에 따라 3~4의 매우 낮은 품질 혹은 7~9의 높은 품질로 평가되기 때문으로 생각된다. 그러나 전체적으로 증가하는 경향성이 나타났다는 것은 가설과는 반대되지만 중앙값이 품질 예측에 여전히 중요한 기준으로 기능할 수 있음을 의미하기에, 후의 분석에 있어서도 이를 포함하여 관찰하였다(Supplementary 1-3).
+
+
+```{r, echo=F, fig.align='center', fig.height=2.5, fig.width=6}
+set.seed(1000)
+windowsFonts(Times=windowsFont("Times New Roman"))
+ggplot(data=abs.train,aes(x=quality1, y=dif.alcohol))+geom_boxplot()+labs(x='Quality', y='Difference from Its Median', caption = '[Figure 2] Box plot of quality and differences of alcohol content from its median') +  theme(text=element_text(family="Times",size=11))
+```
+
+```{r, include = F}
+set.seed(1000)
+library(ggplot2)
+windowsFonts(Times=windowsFont("Times New Roman"))
+train <- read.csv("train.csv")
+red.train<-subset(train, type=="red")
+white.train<-subset(train, type=="white")
+
+r.index<-red.train$index
+r.quality<-red.train$quality
+dif.a.r.fixed.acidity<-abs(red.train$fixed.acidity-median(red.train$fixed.acidity))
+dif.a.r.volatile.acidity<-abs(red.train$volatile.acidity-median(red.train$volatile.acidity))
+dif.a.r.citric.acid<-abs(red.train$citric.acid-median(red.train$citric.acid))
+dif.a.r.residual.sugar<-abs(red.train$residual.sugar-median(red.train$residual.sugar))
+dif.a.r.chlorides<-abs(red.train$chlorides-median(red.train$chlorides))
+dif.a.r.free.sulfur.dioxide<-abs(red.train$free.sulfur.dioxide-median(red.train$free.sulfur.dioxide))
+dif.a.r.total.sulfur.dioxide<-abs(red.train$total.sulfur.dioxide-median(red.train$total.sulfur.dioxide))
+dif.a.r.density<-abs(red.train$density-median(red.train$density))
+dif.a.r.pH<-abs(red.train$pH-median(red.train$pH))
+dif.a.r.sulphates<-abs(red.train$sulphates-median(red.train$sulphates))
+dif.a.r.alcohol<-abs(red.train$alcohol-median(red.train$alcohol))
+
+red.abs.train<-data.frame(r.index,r.quality,dif.a.r.fixed.acidity,dif.a.r.volatile.acidity,dif.a.r.citric.acid,dif.a.r.residual.sugar,dif.a.r.chlorides,
+                          dif.a.r.free.sulfur.dioxide,dif.a.r.total.sulfur.dioxide,dif.a.r.density,dif.a.r.pH,dif.a.r.sulphates,dif.a.r.alcohol)
+
+set.seed(1000)
+n<-nrow(red.abs.train)
+idx <- 1:n
+train_idx <- sample(idx, n*.80)
+test_idx <- setdiff(idx, train_idx)
+red.traindata<-red.abs.train[train_idx,2:13]
+red.testdata<-red.abs.train[test_idx,2:13]
+
+
+w.index<-white.train$index
+w.quality<-white.train$quality
+dif.a.w.fixed.acidity<-abs(white.train$fixed.acidity-median(white.train$fixed.acidity))
+dif.a.w.volatile.acidity<-abs(white.train$volatile.acidity-median(white.train$volatile.acidity))
+dif.a.w.citric.acid<-abs(white.train$citric.acid-median(white.train$citric.acid))
+dif.a.w.residual.sugar<-abs(white.train$residual.sugar-median(white.train$residual.sugar))
+dif.a.w.chlorides<-abs(white.train$chlorides-median(white.train$chlorides))
+dif.a.w.free.sulfur.dioxide<-abs(white.train$free.sulfur.dioxide-median(white.train$free.sulfur.dioxide))
+dif.a.w.total.sulfur.dioxide<-abs(white.train$total.sulfur.dioxide-median(white.train$total.sulfur.dioxide))
+dif.a.w.density<-abs(white.train$density-median(white.train$density))
+dif.a.w.pH<-abs(white.train$pH-median(white.train$pH))
+dif.a.w.sulphates<-abs(white.train$sulphates-median(white.train$sulphates))
+dif.a.w.alcohol<-abs(white.train$alcohol-median(white.train$alcohol))
+
+white.abs.train<-data.frame(w.index,w.quality,dif.a.w.fixed.acidity,dif.a.w.volatile.acidity,dif.a.w.citric.acid,dif.a.w.residual.sugar,dif.a.w.chlorides,
+                            dif.a.w.free.sulfur.dioxide,dif.a.w.total.sulfur.dioxide,dif.a.w.density,dif.a.w.pH,dif.a.w.sulphates,dif.a.w.alcohol)
+
+set.seed(1000)
+n<-nrow(white.abs.train)
+idx <- 1:n
+train_idx <- sample(idx, n*.80)
+test_idx <- setdiff(idx, train_idx)
+white.traindata<-white.abs.train[train_idx,2:13]
+white.testdata<-white.abs.train[test_idx,2:13]
+
+w.quality1=cut(w.quality,breaks=c(3,4,5,6,7,8,9,10),
+             include.lowest=TRUE,
+             right=FALSE,
+             labels=c("3","4","5","6","7","8","9"))
+
+ggplot(data=white.abs.train,aes(x=w.quality1, y=dif.a.w.alcohol))+geom_boxplot()+labs(x='Quality', y='Difference from Its Median', caption = '[Supplementary 1] Box plot of quality and differences of alcohol content from its median') +  theme(text=element_text(family="Times",size=11))
+
+r.quality1=cut(r.quality,breaks=c(3,4,5,6,7,8,9,10),
+             include.lowest=TRUE,
+             right=FALSE,
+             labels=c("3","4","5","6","7","8","9"))
+ggplot(data=white.abs.train,aes(x=w.quality1, y=dif.a.w.alcohol))+geom_boxplot()+labs(x='Quality', y='Difference from Its Median', caption = '[Supplementary 2] Box plot of quality and differences of alcohol content from its median') +  theme(text=element_text(family="Times",size=11))
+
+quality0=cut(train$quality,breaks=c(3,4,5,6,7,8,9,10),
+             include.lowest=TRUE,
+             right=FALSE,
+             labels=c("3","4","5","6","7","8","9"))
+
+ggplot(data=train, aes(x=quality0, y=alcohol))+geom_boxplot()+labs(x='Quality', y='Alcohol', caption = '[Supplementary 3] Box plot of quality and alcohol content') +  theme(text=element_text(family="Times",size=11))
+```
+
+
+|  중앙값을 기반으로 분석을 진행할 때, 유일하게 전처리되지 못하는 변수는 이산형 변수인 와인의 종류다. 자료에는 적포도를 기반으로 하는 레드 와인과 청포도나 껍질을 까낸 적포도를 발효시킨 화이트 와인이 포함되어 있으며, 이들의 맛과 향, 평가 기준, 그리고 첨가물의 양은 서로 다른 관점에서 접근하여야 한다. 아래는 이를 확인하기 위하여 주요 변수인 휘발산과 시트르산의 관계를 와인 종류에 따라 표시한 산점도이다.
+
+```{r, echo=F, warning=F, fig.height=4, fig.width=5.5, fig.align='center'}
+windowsFonts(Times=windowsFont("Times New Roman"))
+set.seed(1000)
+f <- function(dataset, x, y, z, opts=NULL) {
+  ggplot(dataset, aes_string(x = x, y = y, color = z)) +
+   geom_point(alpha = 0.3, position = position_jitter(w = 0.01, h = 0.01), size = 2) + geom_smooth(formula = y ~ x, method = 'lm') + scale_color_manual(values = c("firebrick", "darkseagreen3"))
+}
+
+q <- f(train, "citric.acid", "volatile.acidity", "type")
+q + coord_cartesian(xlim=c(0,1.5), ylim=c(0,1.5)) + labs(x="Citric Acid", y="Volatile Acidity", caption = '[Figure 3] Scatter plot of citric acid content and volatile acid content')+ theme(text=element_text(family="Times",size=11))
+```
+
+|  위와 같이 레드 와인과 화이트 와인에는 그 주원료의 차이로부터 비롯된 변수의 양과 그 사이 관계의 차이가 있다. 따라서 이들에 같은 잣대를 들이대는 것은 불가능하기에, 추후의 분석에서 적포도주와 백포도주를 나누어 모형을 구축하는 것은 합리적이라는 결론을 내릴 수 있었다. 
+
+
+## 랜덤포레스트를 이용한 와인 품질 예측
+
+|  랜덤포레스트를 적용하기에 앞서 적절한 의사결정나무의 개수를 찾기 위하여 이를 바꾸어가면서 레드 와인의 학습용 자료를 이용해 오차율을 계산하였다(Supplementary 4). 일반적으로는 그 개수가 증가할수록 오차율 역시 감소하였으며, 변수 `ntree`가 300 이상이 될 경우 큰 차이는 없는 것으로 관찰되었다. 이것이 증가하면 알고리즘의 시공간 복잡도가 증가하므로, 적절한 효율을 얻기 위하여 이 값은 300, 400, 500을 선택하여 분석을 진행하였다. 또한 여기에서 변수들의 중요도를 확인한 결과 알코올의 중요도가 가장 높았고, 뒤를 이어 휘발산, 총 이산화황, 황산염 등이 나타났다(Supplementary 5). 너무 많은 변수를 포함할 경우 과적합이 우려되기에, 분기의 수는 2, 3, 4를 선택하여 분석을 진행하기로 결정하였다.
+
+```{r, include = F, fig.align='center', fig.height=3.5, fig.width=5.5}
+library(randomForest)
+windowsFonts(Times=windowsFont("Times New Roman"))
+set.seed(1000)
+red_rf <- randomForest(r.quality~., data=red.abs.train[2:13])
+plot(red_rf) # [Supplementary 4] Plot for error rate versus number of trees (red wine)
+varImpPlot(red_rf) # [Supplementary 5] Importance of each variable in random forest (red wine)
+```
+
+|  레드 와인과 화이트 와인에 대하여 중앙값으로부터 차이의 절댓값으로 변수들을 새롭게 정의한 후 의사결정나무의 개수와 가지의 개수를 달리해가며 모델을 얻은 후, 평가용 자료에 이를 도입해 이를 평가하였다(Figure 4, Supplementary 6-7). 
+
+
+```{r, include=F, fig.align='center', fig.height=3, fig.width=5}
+library(caret)
+set.seed(1000)
+n<-nrow(abs.train)
+idx <- 1:n
+train_idx <- sample(idx, n*.70)
+test_idx <- setdiff(idx, train_idx)
+traindata<-abs.train[train_idx,2:13]
+testdata<-abs.train[test_idx,2:13]
+
+library(randomForest)
+
+traindata$train.quality<-as.factor(traindata$train.quality)
+sdf<-randomForest(train.quality~.,data=traindata,ntree=400,mtry=2,importance=T)
+
+t<-table(testdata$train.quality, predict(sdf,newdata=testdata))
+
+library(Metrics)
+sum(t[row(t)==col(t)])/sum(t)
+rmse(as.numeric(testdata$train.quality)-2, as.numeric(predict(sdf, newdata=testdata)))
+
+testdata$pred<-predict(sdf,newdata=testdata)
+
+ggplot(testdata,aes(train.quality,pred,color=train.quality))+
+  geom_jitter(width=0.2,height = 0.1,size=2)+
+  labs(y="Predicted",
+       x="Quality", caption = "[Supplementary 6] Confusion matrix between predicted quality and wine quality") + theme(text=element_text(family="Times",size=11))
+
+```
+
+```{r, echo = F,  fig.align='center', fig.height=3, fig.width=5}
+windowsFonts(Times=windowsFont("Times New Roman"))
+library(randomForest)
+library(Metrics)
+set.seed(1000)
+red.traindata$r.quality<-as.factor(red.traindata$r.quality)
+red.rf1<-randomForest(r.quality~.,data=red.traindata,ntree=500,mtry=4)
+t<-table(red.testdata$r.quality, predict(red.rf1,newdata=red.testdata))
+red.ac <- sum(t[row(t)==col(t)])/sum(t)
+red.sim <- (sum(t[row(t)-1 == col(t)]) + sum(t[row(t)==col(t)]) + sum(t[ row(t) + 1== col(t)]))/sum(t)
+red.rm <- rmse(as.numeric(red.testdata$r.quality)-2, as.numeric(predict(red.rf1, newdata=red.testdata)))
+
+red.testdata$pred<-predict(red.rf1,newdata=red.testdata)
+
+ggplot(red.testdata,aes(r.quality,pred,color=r.quality))+
+  geom_jitter(width=0.2,height = 0.1,size=2)+
+  labs(y="Predicted",
+       x="Quality", caption = "[Figure 4] Confusion matrix between predicted quality and red wine quality") + theme(text=element_text(family="Times",size=11))
+```
+
+```{r, include = F,  fig.align='center', fig.height=3, fig.width=5}
+windowsFonts(Times=windowsFont("Times New Roman"))
+set.seed(1000)
+white.traindata$w.quality<-as.factor(white.traindata$w.quality)
+white.rf2<-randomForest(w.quality~.,data=white.traindata,ntree=400,mtry=3)
+pred<-predict(white.rf2,newdata=white.testdata)
+t<-table(white.testdata$w.quality, pred)
+white.ac <- sum(t[row(t)==col(t)])/sum(t)
+white.rm <- rmse(as.numeric(white.testdata$w.quality)-2, as.numeric(predict(white.rf2, newdata=white.testdata)))
+
+white.testdata$pred<-predict(white.rf2,newdata=white.testdata)
+
+ggplot(white.testdata,aes(w.quality,pred,color=w.quality))+
+  geom_jitter(width=0.2,height = 0.1,size=2)+
+  labs(y="Predicted",
+       x="Quality", caption = "[Supplementary 7] Confusion matrix between predicted quality and white wine quality") + theme(text=element_text(family="Times",size=11))
+```
+
+|  Figure 4는 의사결정나무의 개수의 개수가 500개, 변수의 개수가 4개일 때의 랜덤포레스트 모형을 구축하고 이를 이용해 레드 와인의 평가용 자료에 대한 혼동행렬을 표현한 것이다. 실제 품질와 와인 품질이 정확하고 정밀하게 예측될수록 예측 방식의 효율이 좋다는 점을 고려하였을 때, 우상향의 대각선에 많은 점이 분포하며 그 주변에 대부분의 점이 있음은 예측 방식이 효과적임을 의미한다. 그 정확도는 레드 와인에 대해 0.632, RMSE는 0.734로 나타났으며, 다른 트리 개수나 분기 개수에 대해서도 정확도는 대략 0.6~0.65 정도로 나타났다. 따라서 랜덤 포레스트는 일반적으로 60%의 레드 와인에 대해서 그 품질을 정확히 맞출 수 있으며, 기준을 넓혀 원 품질과 예측 품질이 1 이하로 차이나는 것까지 허용한다면 95% 이상의 높은 정확도를 보였다. 동일한 방법으로 화이트 와인의 평가자료에 대한 예측을 했을 때는정확도가 0.624, RMSE가 0.701이었다. 최종적으로, 주어진 `test.csv`의 와인들 역시 변수 `type`을 기준으로 나눈 이후 전처리하여 와인 품질을 예측하였다(Appendix 1). 
+
+```{r, include = F}
+test<-read.csv("test.csv")
+summary(test)
+
+red.test<-subset(test, type=="red")
+white.test<-subset(test, type=="white")
+
+
+dif.a.r.fixed.acidity<-abs(red.test$fixed.acidity-median(red.train$fixed.acidity))
+dif.a.r.volatile.acidity<-abs(red.test$volatile.acidity-median(red.train$volatile.acidity))
+dif.a.r.citric.acid<-abs(red.test$citric.acid-median(red.train$citric.acid))
+dif.a.r.residual.sugar<-abs(red.test$residual.sugar-median(red.train$residual.sugar))
+dif.a.r.chlorides<-abs(red.test$chlorides-median(red.train$chlorides))
+dif.a.r.free.sulfur.dioxide<-abs(red.test$free.sulfur.dioxide-median(red.train$free.sulfur.dioxide))
+dif.a.r.total.sulfur.dioxide<-abs(red.test$total.sulfur.dioxide-median(red.train$total.sulfur.dioxide))
+dif.a.r.density<-abs(red.test$density-median(red.train$density))
+dif.a.r.pH<-abs(red.test$pH-median(red.train$pH))
+dif.a.r.sulphates<-abs(red.test$sulphates-median(red.train$sulphates))
+dif.a.r.alcohol<-abs(red.test$alcohol-median(red.train$alcohol))
+
+red.a.test<-data.frame(dif.a.r.fixed.acidity,dif.a.r.volatile.acidity,dif.a.r.citric.acid,dif.a.r.residual.sugar,dif.a.r.chlorides,
+                          dif.a.r.free.sulfur.dioxide,dif.a.r.total.sulfur.dioxide,dif.a.r.density,dif.a.r.pH,dif.a.r.sulphates,dif.a.r.alcohol)
+
+dif.a.w.fixed.acidity<-abs(white.test$fixed.acidity-median(white.train$fixed.acidity))
+dif.a.w.volatile.acidity<-abs(white.test$volatile.acidity-median(white.train$volatile.acidity))
+dif.a.w.citric.acid<-abs(white.test$citric.acid-median(white.train$citric.acid))
+dif.a.w.residual.sugar<-abs(white.test$residual.sugar-median(white.train$residual.sugar))
+dif.a.w.chlorides<-abs(white.test$chlorides-median(white.train$chlorides))
+dif.a.w.free.sulfur.dioxide<-abs(white.test$free.sulfur.dioxide-median(white.train$free.sulfur.dioxide))
+dif.a.w.total.sulfur.dioxide<-abs(white.test$total.sulfur.dioxide-median(white.train$total.sulfur.dioxide))
+dif.a.w.density<-abs(white.test$density-median(white.train$density))
+dif.a.w.pH<-abs(white.test$pH-median(white.train$pH))
+dif.a.w.sulphates<-abs(white.test$sulphates-median(white.train$sulphates))
+dif.a.w.alcohol<-abs(white.test$alcohol-median(white.train$alcohol))
+
+white.a.test<-data.frame(dif.a.w.fixed.acidity,dif.a.w.volatile.acidity,dif.a.w.citric.acid,dif.a.w.residual.sugar,dif.a.w.chlorides,
+             dif.a.w.free.sulfur.dioxide,dif.a.w.total.sulfur.dioxide,dif.a.w.density,dif.a.w.pH,dif.a.w.sulphates,dif.a.w.alcohol)
+
+library(randomForest)
+red.abs.train$r.quality<-as.factor(red.abs.train$r.quality)
+red.rf<-randomForest(r.quality~.,data=red.abs.train,ntree=500,mtry=4)
+r.pred<-predict(red.rf1, newdata=red.a.test)
+
+white.abs.train$w.quality<-as.factor(white.abs.train$w.quality)
+white.rf<-randomForest(w.quality~.,data=white.abs.train,ntree=400,mtry=3)
+w.pred<-predict(white.rf2,newdata=white.a.test)
+
+library(openxlsx)
+write.xlsx(r.pred,file="rtest.xlsx",sheetName="1")
+write.xlsx(w.pred,file="wtest.xlsx",sheetName="1")
+# [Appendix 1] 이를 종합하여 정리한 파일
+```
+
+
+
+## 인공신경망을 이용한 와인 품질 예측
+
+```{r, include = F}
+library(Metrics)
+library(hardhat)
+library(lattice)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape)
+library(usethis)
+library(ROCR)
+library(caret)
+library(MASS)
+library(NeuralNetTools)
+library(tidyverse)
+library(gridExtra)
+library(grid)
+library(png)
+library(downloader)
+library(grDevices)
+library(nnet)
+
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+set.seed(5)
+red.traindata$r.quality <- as.factor(red.traindata$r.quality)
+rnumNN <- function(n, data){
+  s <- rep(0,n)
+  for (i in 1:n){
+    nn.wine <- nnet(formula = r.quality~., data = red.traindata, size = 10, maxit=1000, decay = 0.0005)
+    s <- cbind(s,predict(nn.wine, newdata=data, type = "class"))
+    }
+    s <- as.data.frame(s)
+    t <- rep(0,n)
+    l = nrow(data)
+    for (j in 1:l){
+      t[j] <- getmode(s[j,])
+    }
+    t <- as.numeric(t(t))
+  return (t)
+}
+
+t <- rnumNN(10, red.testdata)
+
+library(formattable)
+library(knitr)
+
+ts <- as.numeric(red.testdata$r.quality)
+i <- t(table(red.testdata$r.quality, t))
+```
+
+```{r, include = F}
+kable(i, col.names=c('3', '4', '5', '6', '7', '8'))
+paste("Accuracy of ANN is ", accuracy(ts,as.numeric(t)), " / RMSE of ANN is ", rmse(ts, as.numeric(t)))
+```
+
+```{r, include = F}
+paste("Accuracy of ANN is ", accuracy(ts,as.numeric(t)), " / RMSE of ANN is ", rmse(ts, as.numeric(t)))
+
+set.seed(5)
+white.traindata$w.quality <- as.factor(white.traindata$w.quality)
+wnumNN <- function(n, data){
+  s <- rep(0,n)
+  for (i in 1:n){
+    nn.wine <- nnet(formula = w.quality~., data = white.traindata, size = 10, maxit=1000, decay = 0.0005)
+    s <- cbind(s,predict(nn.wine, newdata=data, type = "class"))
+    }
+    s <- as.data.frame(s)
+    t <- rep(0,n)
+    l = nrow(data)
+    for (j in 1:l){
+      t[j] <- getmode(s[j,])
+    }
+    t <- as.numeric(t(t))
+  return (t)
+}
+
+t <- wnumNN(20, white.testdata)
+
+library(formattable)
+library(knitr)
+
+ts <- as.numeric(white.testdata$w.quality)
+i <- t(table(white.testdata$w.quality, t))
+paste("Accuracy of ANN is ", accuracy(ts,as.numeric(t)), " / RMSE of ANN is ", rmse(ts, as.numeric(t)))
+```
+
+```{r, include = F}
+kable(i, col.names = c('3', '4', '5', '6', '7', '8', '9'))
+paste("Accuracy of ANN is ", accuracy(ts,as.numeric(t)), " / RMSE of ANN is ", rmse(ts, as.numeric(t)))
+```
+
+```{r ANN1, include=FALSE, figure.height = 10, out.width="50%", warning = F, message=F, results = F}
+library(Metrics)
+library(hardhat)
+library(lattice)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(reshape)
+library(usethis)
+library(ROCR)
+library(caret)
+library(MASS)
+library(NeuralNetTools)
+library(tidyverse)
+library(gridExtra)
+library(grid)
+library(png)
+library(downloader)
+library(grDevices)
+library(nnet)
+
+normalize <- function(x){
+  return((x-min(x))/(max(x)-min(x)))
+}
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+winepp <- read.csv("train.csv")
+# Standardization of each column of wine
+for (i in 3:13){
+  winepp[,i] = standardize(winepp[,i])
+}
+winepp <- winepp[, 2:14]
+winepp$quality <- as.factor(winepp$quality)
+
+wineClasspp <- split(winepp, winepp$type)
+redwinepp <- wineClasspp[1]
+redwinepp <- as.data.frame(redwinepp)
+redwinepp <- redwinepp[, c(1:12)]
+whitewinepp <- wineClasspp[2]
+whitewinepp <- as.data.frame(whitewinepp)
+whitewinepp <- whitewinepp[, c(1:12)]
+
+library(caTools) 
+set.seed(3)
+
+idxpp <- sample(x = c("train", "test"), size = nrow(redwinepp), replace = T, prob = c(4, 1))
+
+trainpp <- redwinepp[idxpp == "train", ] 
+testpp <- redwinepp[idxpp == "test", ]
+```
+
+```{r ANN2, echo=FALSE, out.width="50%", warning = F, message=F, results = F}
+set.seed(5)
+rnumNNpp <- function(n, data){
+  s <- rep(0,n)
+  for (i in 1:n){
+    nn.winepp <- nnet(formula = red.quality~., data = trainpp, size = 10, maxit=1000, decay = 0.0005)
+    s <- cbind(s,predict(nn.winepp, newdata=data, type="class"))
+    }
+    s <- as.data.frame(s)
+    t <- rep(0,n)
+    l = nrow(data)
+    for (j in 1:l){
+      t[j] <- getmode(s[j,])
+    }
+    t <- as.numeric(t(t))
+  return (t)
+}
+
+t <- rnumNNpp(10, testpp)
+
+library(formattable)
+library(knitr)
+
+ts <- as.numeric(testpp$red.quality) + 2
+i <- t(table(testpp$red.quality, t))
+paste("Accuracy of ANN is ", accuracy(testpp$red.quality,t), " / RMSE of ANN is ", rmse(ts, as.numeric(t)))
+```
+
+```{r, echo = F}
+kable(i, col.names = c('3', '4', '5', '6', '7', '8', '9'))
+```
+
+
+```{r ANN3, include=FALSE, fig.height=10, warning = F, message=F}
+set.seed(5)
+idypp <- sample(x = c("train", "test"), size = nrow(whitewinepp), replace = T, prob = c(4, 1))
+
+trainpp <- whitewinepp[idxpp == "train", ] 
+testpp <- whitewinepp[idxpp == "test", ]
+
+set.seed(5)
+wnumNNpp <- function(n, data){
+  s <- rep(0,n)
+  for (i in 1:n){
+    nn.winepp <- nnet(formula = white.quality~., data = trainpp, size = 10, maxit=1000, decay = 0.0005)
+    s <- cbind(s,predict(nn.winepp, newdata=data, type="class"))
+    }
+    s <- as.data.frame(s)
+    t <- rep(0,n)
+    l = nrow(data)
+    for (j in 1:l){
+      t[j] <- getmode(s[j,])
+    }
+    t <- as.numeric(t(t))
+  return (t)
+}
+
+t <- wnumNNpp(10, testpp)
+
+library(formattable)
+library(knitr)
+
+ts <- as.numeric(testpp$white.quality) + 2
+i <- t(table(testpp$white.quality, t))
+paste("Accuracy of ANN is ", accuracy(testpp$white.quality,t), " / RMSE of ANN is ", rmse(ts, as.numeric(t)))
+```
+
+```{r, echo = F}
+kable(i, col.names = c('3', '4', '5', '6', '7', '8', '9'))
+```
+
+| 앞서 언급하였듯이, 위에서와 같이 데이터를 처리할 경우 중앙값으로부터의 차이를 기준으로 데이터를 새롭게 구축할 수 있지만, 그 과정에서 그 대소에 대한 정보가 일부 사라진다. 따라서 이를 피하기 위해, 비선형 데이터의 예측에도 용이한 인공신경망 과정에서는 데이터 전처리 없이 진행하였다. 분석 결과 그 정확도는 레드 와인과 화이트 와인 모두에 대해 랜덤포레스트와 유사하게 0.6 가량(위;레드 와인: 0.637, 아래;화이트 와인: 0,568)이 나왔다. 그 RMSE값은 레드 와인과 화이트 와인에 대해 각각 0.697, 0.738로 역시 랜덤포레스트에서와 같았다. 그러나 인공신경망을 적용하기에는 자료의 크기가 비교적 작고, 많은 시간을 요한다는 그 효율성은 낮다고 생각되었다. 따라서, 추후 발전은 랜덤포레스트를 이용해 진행하는 편이 더욱 좋다는 결론을 내릴 수 있었다.
+
+
+## 4-2. 기타 연구 가설: 이산화황이 와인 양조에 미치는 영향의 분석
+
+## 이산화황과 변수 사이 관계에 대한 상관분석
+
+|  효모의 활성은 포도와 더불어 와인의 맛과 향을 조절하는 매우 중요한 요소임이 틀림없다. 특히, 선행 연구들은 당이 알코올로 분해되는 과정, 그리고 시트르산이 휘발산으로 분해되는 과정이 와인의 발효에 사용되는 효모인 *S.cerevisiae*과 *C.lipolytica* 등에 의해 수행된다고 밝히고 있다[7-8]. 이는 곧 처음에 투입된 포도의 수준이 유사하다고 가정하였을 때 당과 알코올, 시트르산과 휘발산 사이에는 음의 상관관계가 있어야 함을 의미한다. 이를 히트맵을 통해 확인한 결과가 아래와 같다(Figure 5).
+
+```{r, echo = F, warning =F, message = F, fig.align='center',  fig.height=5.5, fig.width=5.5}
+library(ggcorrplot)
+windowsFonts(Times=windowsFont("Times New Roman"))
+corr <- cor(train[3:13])
+ggcorrplot(corr, method = c("square", "circle"), type = c("full",
+  "lower", "upper"), ggtheme = ggplot2::theme_minimal, title = "[Figure 5] Correlation Matrix for Variables",
+  show.legend = TRUE, legend.title = "Corr", show.diag = T,
+  colors = c("blue", "white", "red"), outline.color = "gray",
+  hc.order = FALSE, hc.method = "complete", lab = T,
+  lab_col = "black", lab_size = 3, p.mat = NULL, sig.level = 0.05,
+  insig = c("pch", "blank"), pch = 4, pch.col = "black",
+  pch.cex = 5, tl.cex = 12, tl.col = "black", tl.srt = 45,
+  digits = 1) + theme(text=element_text(family="Times",size=11))
+```
+
+|  예상한 바와 같이 휘발산과 시트르산 사이의 상관계수는 -0.38로 음이었으며, 이는 상관분석 결과 유의한 값으로 나타났다. 또한 음의 상관관계는 잔당과 알코올에 대해서도 비슷한 상관계수 -0.36을 가지고 나타났으며, 이 역시 유의했다. 즉 시트르산으로부터 휘발산, 당으로부터 알코올을 얻어내는 생화학적 반응은 와인 발효 과정에서 일어남을 확인할 수 있었다. 이러한 경향성은 레드 와인과 화이트 와인에서 일부 다르게 나타났으며, 이에 따라 추후의 분석에서도 둘을 나누어 시행하였다(Figure 3, Supplementary 8).
+
+```{r, include = F}
+cor.test(train$volatile.acidity, train$citric.acid)
+cor.test(train$residual.sugar, train$alcohol)
+```
+
+```{r, include = F, fig.align='center', fig.height=3, fig.width=5}
+windowsFonts(Times=windowsFont("Times New Roman"))
+library(ggplot2)
+
+f <- function(dataset, x, y, z, opts=NULL) {
+  ggplot(dataset, aes_string(x = x, y = y, color = z)) +
+   geom_point(alpha = 0.3, position = position_jitter(w = 0.01, h = 0.01), size = 2) + geom_smooth(formula = y ~ x, method = 'lm') + scale_color_manual(values = c("firebrick", "darkseagreen3"))
+} + theme(text=element_text(family="Times",size=11))
+
+p <- f(train, "residual.sugar", "alcohol", "type")
+p + coord_cartesian(xlim=c(0,25), ylim=c(7.5, 16)) + labs(x="Residual Sugar", y="Alcohol", caption = '[Supplementary 8] Scatter plot of residual sugar content and alcohol content')
+```
+
+|  이때 특이한 것이, 이산화황은 그 형태와 상관 없이 휘발산의 양과 알코올의 양에 대해서는 유의미한 음의 상관관계를 가지나, 시트르산과 잔에 대해서는 모두 유의미한 양의 상관관계를 가지고 있었다. 이산화황이 미생물 생장을 억제함으로써 혐기 상태 반응조 내 미생물 생태를 조절하는 데 효과적임을 고려하였을 때, 이산화황에 의해 이러한 물질들의 농도가 변하는 것은 자연스럽다. 양의 상관관계를 가지는 시트르산과 잔당이 모두 반응물이며 음의 상관관계를 가지는 휘발산과 알코올은 생성물임을 고려해 보았을 때, 효모의 대사 과정은 이산화황에 억제됨을 예상할 수 있었다(Supplementary 9).
+
+```{r, include = F}
+cor.test(train$volatile.acidity, train$total.sulfur.dioxide)
+cor.test(train$volatile.acidity, train$free.sulfur.dioxide)
+cor.test(train$citric.acid, train$total.sulfur.dioxide)
+cor.test(train$citric.acid, train$free.sulfur.dioxide)
+cor.test(train$residual.sugar, train$total.sulfur.dioxide)
+cor.test(train$residual.sugar, train$free.sulfur.dioxide)
+cor.test(train$alcohol, train$total.sulfur.dioxide)
+cor.test(train$alcohol, train$free.sulfur.dioxide)
+```
+
+```{r, include=F, fig.align='center'}
+par(mfrow = c(2,2), no.readonly = T)
+wine <- train
+plot(wine$total.sulfur.dioxide, wine$volatile.acidity, xlab = "Total Sulfur Dioxide", ylab = "Volatile Acidity")
+plot(wine$total.sulfur.dioxide, wine$citric.acid, xlab = "Total Sulfur Dioxide", ylab = "Citric Acid")
+plot(wine$total.sulfur.dioxide, wine$alcohol, xlab = "Total Sulfur Dioxide", ylab = "Alcohol")
+plot(wine$total.sulfur.dioxide, wine$residual.sugar, xlab = "Total Sulfur Dioxide", ylab = "Residual Sugar") # [Supplement 9] Relationship between total sulfur dioxide and others 
+```
+
+## ANOVA를 이용한 이산화황의 효과 분석
+
+|  먼저, 자유 이산화황의 양을 기반으로 전체 데이터를 네 개로 나누어 블록화하였다. 그 다음, 각각 자료에 대해 $\log(Product/Reactant)$을 계산한 후 이산화황의 양에 따른 그 변화를 ANOVA와 산점도를 이용하여 분석했다. 이때 $\log(Product/Reactant)$를 계산한 이유는, 일반적인 화학 반응에서 이 값이 평형의 위치를 표현하기 때문이다. 알코올과 잔당에 대해 이를 분석한 결과 자유 이산화황 양에 따른 통계적인 유의미한 차이가 있는 것으로 관찰되었으며, 산점도로부터 이는 음의 상관관계를 가짐을 알 수 있었다. 즉, 이산화황의 농도가 높아질수록 생성물의 양이 줄어든다는 것이다. 이는 앞서 예상한 것처럼 이산화황이 효소의 활성을 억제하여 당이 알코올로 변하는 과정을 억제함을 의미한다(Figure 6; 아래 그림, Supplementary 10). 
+
+```{r, include = F}
+white<-subset(train,train$type=='white')
+red<-subset(train,train$type=='red')
+white<-subset(white,2<=white$free.sulfur.dioxide&white$free.sulfur.dioxide<=79.5)
+red<-subset(red,1<=red$free.sulfur.dioxide&red$free.sulfur.dioxide<=42)
+
+#white
+#anova
+a<-subset(white,white$free.sulfur.dioxide<=23)
+b<-subset(white,23<white$free.sulfur.dioxide&white$free.sulfur.dioxide<=34)
+c<-subset(white,34<white$free.sulfur.dioxide&white$free.sulfur.dioxide<=46)
+d<-subset(white,white$free.sulfur.dioxide>46)
+w.f.sulfur<-rep(1:4,c(1067,1108,997,949))
+A<-log(a$alcohol/a$residual.sugar)
+B<-log(b$alcohol/b$residual.sugar)
+C<-log(c$alcohol/c$residual.sugar)
+D<-log(d$alcohol/d$residual.sugar)
+w<-c(A,B,C,D)
+model17<-lm(w~factor(w.f.sulfur))
+anova(model17)
+#?ܼ?ȸ??
+x<-log(white$alcohol/white$residual.sugar)
+model18<-lm(white$free.sulfur.dioxide~x)
+summary(model18)
+```
+
+```{r, echo = F}
+plot(x,white$free.sulfur.dioxide)
+abline(model18,col="red")
+```
+
+```{r, include = F}
+#red
+#?ܼ?ȸ??
+y<-log(red$alcohol/red$residual.sugar)
+model19<-lm(red$free.sulfur.dioxide~y)
+plot(y,red$free.sulfur.dioxide) # [Supplement 10] 생성물/반응물 비의 로그에 대한 산점도
+summary(model19)
+abline(model19,col="red")
+#anova
+e<-subset(red,red$free.sulfur.dioxide<=7)
+f<-subset(red,7<red$free.sulfur.dioxide&red$free.sulfur.dioxide<=14)
+g<-subset(red,14<red$free.sulfur.dioxide&red$free.sulfur.dioxide<=21)
+h<-subset(red,red$free.sulfur.dioxide>21)
+r.f.sulfur<-rep(1:4,c(337,367,309,300))
+E<-log(e$alcohol/e$residual.sugar)
+F<-log(f$alcohol/f$residual.sugar)
+G<-log(g$alcohol/g$residual.sugar)
+H<-log(h$alcohol/h$residual.sugar)
+r.f.sulfur<-rep(1:4,c(337,367,309,300))
+r<-c(E,F,G,H)
+model20<-lm(r~factor(r.f.sulfur))
+anova(model20)
+```
+
+
+
+## 다중회귀를 통한 이산화황의 효과 분석
+
+|  레드 와인과 화이트 와인으로 나누어 설명변수를 자유 이산화황과 잔당으로 하고 반응변수를 알코올로 하는 다중회귀분석과 설명변수를 자유 이산화황과 시트르산으로 하고 반응변수를 휘발산으로 하는 다중회귀분석을 시행하고자 했다. 이를 위해, 먼저 잔차도를 보아 다중선형회귀의 가정들을 만족하는지 확인하였다. 그 결과 아래 코드를 이용해 독립성, 선형성, 등분산성, 정규성의 가정들을 어느 정도 만족함을 관찰할 수 있었다(Figure 7; 아래 그림).
+
+```{r}
+model13<-lm(red$alcohol~red$residual.sugar+red$free.sulfur.dioxide,red)
+plot(fitted(model13),rstudent(model13))
+abline(h=c(-2,2),col="red")
+```
+
+|  레드 와인과 화이트 와인으로 나누어 설명변수를 자유 이산화황과 잔당으로 하고 반응변수를 알코올로 하는 다중회귀분석과 설명변수를 자유 이산화황과 시트르산으로 하고 반응변수를 휘발산으로 하는 다중회귀분석을 시행하였다. 화이트 와인에서는 잔당의 회귀계수가 -0.099로 음수이고 이산화황의 회귀계수는 -0.01로 음수였다. 이들은 모두 작은 값이기는 했지만 p값은 매우 작아 통계적으로 유의함이 밝혀졌으며, 이는 이산화황은 효모의 활성을 막음으로써 알코올의 생성을 막는다는 사실과 일치한다. 반면 레드 와인에서는 이산화황의 회귀계수가 -0.008로 음수였으나, 잔당에 대해서는 그 계수가 0.0766 가량으로 양수였다. 또한, 이들은 유의수준 1%에서 의미있었다. 따라서 이산화황은 효모의 활성을 억제하지만, 레드 와인에서는 다른 매커니즘의 존재로 인해 오히려 잔당과 알코올은 양의 상관관계를 맺음을 알 수 있다. 이는 포도 종류의 차이로 인하여 생기는 결과로 보인다. 
+
+|  이와 같은 방법으로 시트르산과 휘발산에 대해서 보았을 때에도 유사한 관계가 관찰되었다. 화이트 와인에 대해 다중회귀분석을 수행한 결과 시트르산의 회귀계수는 -0.11로 음수였다. 레드 와인의 경우에는 이 값이 -0.51로 절댓값이 매우 컸다. 반면, 이들 각각의 경우에서 자유 이산화황에 대한 회귀계수를 보았을 때에는 0.001보다 그 계수가 작았으며, 레드 와인의 경우에는 통계적으로 유의하지 않았다. 또, 결정계수 값도 매우 낮았다. 이는 시트르산과 휘발산에 대해서는 이산화황이 아닌 다른 교락 요인이 더 중요하게 작용함을 암시한다. 즉, 시트르산이 많은 포도일수록 휘발산의 함량은 적은 등의 다른 관계가 음의 상관관계에 대한 주요 원인이지, 이산화황은 큰 영향을 미치지 않는다고 결론내릴 수 있었다. 
+
+```{r, include=FALSE}
+model9<-lm(white$alcohol~white$residual.sugar+white$free.sulfur.dioxide,white)
+summary(model9)
+
+model11<-lm(white$volatile.acidity~white$citric.acid+white$free.sulfur.dioxide,white)
+summary(model11)
+
+model13<-lm(red$alcohol~red$residual.sugar+red$free.sulfur.dioxide,red)
+summary(model13)
+
+model15<-lm(red$volatile.acidity~red$citric.acid+red$free.sulfur.dioxide, red)
+summary(model15)
+```
+
+
+# 5. 결론
+<br>
+
+|  각 변수들이 적당한 값을 취할수록 높은 품질을 가질 것이라는 일반적인 예측을 근거로 한 와인 품질 가설은 탐색적 자료 분석을 통해 많은 변수에 대해 성립함을 확인할 수 있었다. 그러나 알코올과 같은 몇몇 변수에 대해서는 이것이 적용되지 않았고, 이 처리는 데이터의 대소 관련 정보를 축소한다는 단점이 있었다. 레드 와인과 화이트 와인을 나누어 예측을 수행하였을 때 랜덤 포레스트는 짧은 처리 시간과 높은 정확도, 낮은 RMSE를 보여주었으며 가장 좋은 알고리즘이라 평가되었다. 가지의 개수와 분기의 개수를 달리해 가면서 이를 시행한 결과 가지의 개수가 증가할수록 오차율이 낮아지는 것을 보여주었으며, 결과적으로 약 0.6 정도의 정확도를 얻을 수 있었다. 다만, 매커니즘 증거와 자료 개수의 부족으로 인해 더 높은 정확도를 얻는 데에는 실패하였다. 또한, 알코올이 여기서 중요한 변수로서 작용함이 밝혀졌는데 알코올은 중앙값으로부터의 거리와 품질 간의 관계가 예상한 바와 같지 않았기에 RMSE는 더욱 올라갔을 것으로 추정된다. 중앙값은 단지 추정된 값이었기에, 더욱 많은 부석을 통해 특정 값을 잡은 이후 그 점과의 차이를 이용하여 분석을 시행한다면 더욱 좋은 결과를 얻을 수 있을 것이다. 또한 ANN 역시 실시하였으나 처리 시간이 길고 만족스럽지 못한 결과를 보였고, 더욱의 개선이 필요할 것으로 보인다. 이처럼 와인 품질 예측은 약 60%의 예측 정확도를 보였으며, 이를 더욱 개선할 경우 제안한 바처럼 가정이나 소규모 양조장에서도 손쉽게 품질을 예측할 수 있을 것이라 기대된다.
+
+|  기타 연구 가설에서는 이산화황의 양에 따른 다른 변수들의 변화를 효모의 활성 관점에서 분석하였다. 특히, 효모의 생화학 경로에 포함되어 있는 당에서 알코올로의 발효와 시트르산에서의 휘발산 변화를 집중적으로 분석하였다. ANOVA와 상관분석, 다중회귀 등을 통해 이산화황의 영향을 분석한 결과, 당과 알코올에 대해서는 그 비율에 이산화황이 큰 영향을 미치는 것으로 확인되었고, 이는 우리의 예상과 같이 효모의 활성을 억제함으로써 알코올을 줄이는 방향으로 작용했다. 반면, 시트르산과 휘발산의 관계는 비교적 약하게 나타났고 통계적으로 그리 유의하지 않았다. 그러나 이산화황이 알코올과 당의 비율에 어떤 영향을 미치는지를 확인할 수 있었기에, 이는 와인의 바디감과 향을 자신이 원하는 대로 조절하는 과정에 큰 도움을 줄 것으로 보인다.
+
+
+# 6. 각 조원이 보고서 및 발표에 기여한 바
+권이태 : 보고서 R markdown 작성, 자료 정리 및 데이터 시각화, 와인 품질 가설의 데이터 분석 도움(KNN, ANN)
+       
+김예원 : 변수에 대한 탐색적 자료 분석, 와인 품질 가설 분석 코드 작성 및 분석(의사결정나무, Random Forest), 예측 모델 신뢰성 분석, 와인 품질 예측
+       
+김태희 : 기타 연구 가설 관련 탐색적 자료 분석, 기타 연구 가설 코드 작성 및 분석, 기타 연구 가설 검증, 이산화황 농도 결정을 통한 와인 양조의 개인화 가능성 분석
+
+<br>
+
+# 7. 참고 문헌
+1. 이마트24 (2021). 이마트24 와인, 올해도 3배 성장 중! 3월에도 와인 커뮤니티 달군다!. https://www.shinsegaegroupnewsroom.com/54624/ (검색일: 2020.06.11)
+2. 신세계그룹 (2021). 이마트, 역대 최대 규모 와인장터 개최. https://www.shinsegaegroupnewsroom.com/60282/ (검색일: 2020.06.11)
+3. 이마트 (2021). 2021 1분기 보고서. http://www.emartcompany.com/ko/investor/irfinance_list.do (검색일: 2020.06.11)
+4. Andrew L. Waterhouse *et al* (2016). Understanding Wine Chemistry. Wiley. 
+5. 기획재정부 (2019). 2018년도 세법 후속 시행령 개정안 수정사항. https://www.moef.go.kr/nw/nes/detailNesDtaView.do?searchBbsId1=MOSFBBS_000000000028&searchNttId1=MOSF_000000000026762&menuNo=4010100 (검색일: 2020.06.11)
+6. Presque Isle Wine Cellars. Use and Measurement of Sulfur Dioxide in Wine. https://www.piwine.com/media/home-wine-making-basics/using_sulfur_dioxide.pdf (검색일: 2020.06.11)
+7. Guy N. B. (1951). Basic Effects of Sulfur Dioxide on Yeast Growth. *Am J Enol Vitic*. **2**. 43-53.
+8. Farouk A.H. *et al*. (1981). Fermentative Production of Citric Acid by Yeasts. *Agricultural Wastes*. **3**(1). 21-33.
+9. 엄경자 (2006). [엄경자의 와인이야기] 타닌ㆍ산ㆍ알콜ㆍ당 … 성분의 조화가 맛 결정. https://www.hankyung.com/society/article/2006102051881 (검색일: 2020.06.11)
+
+# 8. 부록
+이 보고서의 사용 코드 및 보조 자료는 재현 가능성의 보존을 위해 GitHub에 r markdown 파일 형식으로도 게시하였다. 접근 가능한 주소는 아래와 같다:
+
+https://github.com/Yitae-Kwon/2021-Spring-StatLab-Project
+
